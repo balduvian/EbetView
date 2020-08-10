@@ -76,7 +76,7 @@ namespace CNGE {
 
 			glFlush();
 			
-			window->swap();
+			//window->swap();
 		}
 
 		input->update();

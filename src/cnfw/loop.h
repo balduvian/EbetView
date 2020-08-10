@@ -13,6 +13,7 @@ namespace CNFW {
 	class Loop {
 	private:
 		using nanos = std::chrono::nanoseconds;
+		using millis = std::chrono::milliseconds;
 		using seconds = std::chrono::seconds;
 		using clock = std::chrono::steady_clock;
 		using point = std::chrono::time_point<clock>;
@@ -30,13 +31,17 @@ namespace CNFW {
 		std::vector<nanos> frameHistory;
 		std::vector<nanos>::iterator frameIter;
 
-		auto doFrame(std::function<void(Timing*)>) -> void;
-
+		static auto sleep(i64) -> bool;
+		
+		auto doFrame(std::function<void(Timing*)>&, point) -> void;
+		
 	public:
 		Loop(u32);
 		Loop();
 
-		auto begin(std::function<bool()>, std::function<void(Timing*)>) -> void;
+		i32 errCode;
+		
+		auto begin(std::function<bool()>&&, std::function<void(Timing*)>&&) -> void;
 
 		auto setFPS(u32) -> void;
 	};

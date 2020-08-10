@@ -242,7 +242,7 @@ namespace CNFW {
 	
 	Window::Window(const wchar_t* title, i32 x, i32 y, i32 width, i32 height, i32 iconID) {
 		/* get window and instance and context */
-		createOpenGLWindow(title, x, y, width, height, iconID, PFD_TYPE_RGBA, PFD_DOUBLEBUFFER);
+		createOpenGLWindow(title, x, y, width, height, iconID, PFD_TYPE_RGBA, PFD_SUPPORT_OPENGL);
 
 		glContext = wglCreateContext(deviceContext);
 		wglMakeCurrent(deviceContext, glContext);

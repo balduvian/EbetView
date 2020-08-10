@@ -4,22 +4,51 @@
 #include <thread>
 #include <string>
 
+#include "window.h"
+
 #include "loop.h"
 
 namespace CNFW {
 	Loop::Loop(bool sanic, u32 fps) : 
-		sanic(sanic), fps(fps), frameHistory(fps), frameTime(Timing::BILLION / fps), last(), next(), frameIter(frameHistory.begin()) {}
+		sanic(sanic), fps(fps), frameTime(std::chrono::duration_cast<nanos>(seconds(1) / f64(fps))), frameHistory(300), frameIter(frameHistory.begin()), errCode(0) {
+	}
 
-	auto Loop::doFrame(std::function<void(Timing*)> frame) -> void {
-		auto now = clock::now();
-
+	auto Loop::sleep(const i64 ns) -> bool {
+		/* Declarations */
+		HANDLE timer;   /* Timer handle */
+		LARGE_INTEGER li;   /* Time defintion */
+		/* Create timer */
+		if (!(timer = CreateWaitableTimer(nullptr, true, nullptr)))
+			return false;
+		/* Set timer properties */
+		li.QuadPart = -ns;
+		if (!SetWaitableTimer(timer, &li, 0, nullptr, nullptr, false)) {
+			CloseHandle(timer);
+			return false;
+		}
+		/* Start & wait for timer */
+		WaitForSingleObject(timer, INFINITE);
+		/* Clean resources */
+		CloseHandle(timer);
+		/* Slept without problems */
+		return true;
+	}
+	
+	auto Loop::doFrame(std::function<void(Timing*)>& frame, const point now) -> void {
 		/* calculate how long this frame took */
-		auto delta = (now - last);
+		const auto delta = now - last;
 
-		/* frame will happen exactly frameTime away from last frame */
-		/* unless there is severe lag, then the baseline for a second shifts */
-		next = (delta < frameTime * 2) ? last + frameTime : now + frameTime;
-		last = now;
+		if (delta < frameTime * 2) {
+			/* no lag happened, frames as usual */
+			next = last + frameTime * 2;
+			last = last + frameTime;
+		} else {
+			/* lag detected! reset */
+			next = now + frameTime;
+			last = now;
+		}
+
+		OutputDebugString((std::to_wstring(delta.count()) + L"\n").c_str());
 
 		/* record how long this frame took */
 		*frameIter = delta;
@@ -34,7 +63,7 @@ namespace CNFW {
 		for (; frameTally < fps; ++frameTally) {
 			totalTime += *tempIter;
 
-			if (totalTime > std::chrono::seconds(1))
+			if (totalTime > seconds(1))
 				break;
 
 			/* circle back to end of frame history */
@@ -57,27 +86,28 @@ namespace CNFW {
 	Loop::Loop(u32 fps) : Loop(false, fps) {}
 	Loop::Loop() : Loop(true, 0) {}
 	
-	auto Loop::begin(std::function<bool()> exit, std::function<void(Timing*)> frame) -> void {
-		/* in nanoseconds */
-		auto frameTime = std::chrono::duration_cast<nanos>(seconds(1) / f64(fps));
-
+	auto Loop::begin(std::function<bool()>&& exit, std::function<void(Timing*)>&& frame) -> void {
 		last = clock::now();
 		next = clock::now();
 
 		while (!exit()) {
+			/* sanic mode skips all waiting code */
 			if (!sanic) {
-				auto now = clock::now();
+				const auto waitTime = std::chrono::duration_cast<millis>((next - clock::now()) - nanos(1000)).count();
 
-				auto timeUntilFrame = next - now;
-
-				std::this_thread::sleep_for(timeUntilFrame);
+				/* let the cpu rest for most of the time */
+				/* calculate the time remaining until next frame*/
+				sleep(waitTime);
+				
+				/* spin until it's exactly time for a new frame */
+				while (clock::now() < next);
 			}
 
-			doFrame(frame);
+			doFrame(frame, clock::now());
 		}
 	}
 
-	auto Loop::setFPS(u32 fps) -> void {
+	auto Loop::setFPS(const u32 fps) -> void {
 		this->fps = fps;
 	}
 }
